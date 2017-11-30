@@ -29,6 +29,7 @@ class errors(BasePlugin):
 
 	regex = [
             ('MySQL', 'You have an error in your SQL syntax'),
+            ('MySQL', 'Warning: mysql_fetch_array'),
 	]
 
 	self.error_regex = []
