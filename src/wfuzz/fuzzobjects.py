@@ -32,6 +32,24 @@ class headers:
         for k, v in dd.items():
             self._req._headers[k] = v
 
+    def set_field(self, field, value, append = False):
+        attr = field.split(".")
+        num_fields = len(attr)
+
+        if num_fields == 2:
+            if attr[1] == "request":
+                for kvar, kvalue in self.request.items():
+                    self._req._headers[kvar] = value if not append else self.request[attr[2]] + value
+            else:
+                raise FuzzExceptBadAPI("headers must be specified in the form of headers.request")
+        elif num_fields == 3:
+            if attr[1] == "request":
+                self._req._headers[attr[2]] = value if not append else self.request[attr[2]] + value
+            else:
+                raise FuzzExceptBadAPI("headers must be specified in the form of headers.request]")
+        else:
+            raise FuzzExceptBadAPI("headers must be specified in the form of headers.request[.<header name>]")
+
     def get_field(self, field):
         attr = field.split(".")
         num_fields = len(attr)
@@ -85,6 +103,33 @@ class cookies:
 
         return {}
 
+    def set_field(self, field, value, append = False):
+        attr = field.split(".")
+        num_fields = len(attr)
+
+        cookies = self.request
+
+        if num_fields == 2:
+            if attr[1] == "request":
+                for k,v in cookies.items():
+                    cookies[k] = cookies[k] + value if append else value
+                self._req._headers['Cookie'] = "; ".join(map(lambda x: "%s=%s" % (x[0], x[1]), cookies.items()))
+
+            else:
+                raise FuzzExceptBadAPI("Cookie must be specified in the form of cookies.request")
+        elif num_fields == 3:
+            try:
+                if attr[1] == "request":
+                    cookies[attr[2]] = cookies[attr[2]] + value if append else value
+                    self._req._headers['Cookie'] = "; ".join(map(lambda x: "%s=%s" % (x[0], x[1]), cookies.items()))
+                else:
+                    raise FuzzExceptBadAPI("headers must be specified in the form of headers.request.<cookie name>")
+            except KeyError:
+                return ""
+
+        else:
+            raise FuzzExceptBadAPI("Cookie must be specified in the form of cookies.request.<<name>>")
+
     def get_field(self, field):
         attr = field.split(".")
         num_fields = len(attr)
@@ -132,6 +177,37 @@ class params(object):
             self._req.setPostData("&".join(["=".join([n,v]) if v is not None else n for n,v in pp.items()]))
         elif isinstance(pp, str):
             self._req.setPostData(pp)
+
+    def set_field(self, field, value, append = False):
+        attr = field.split(".")
+        num_fields = len(attr)
+
+        if num_fields == 1 and attr[0] == "params":
+            for kvar, kvalue in map(lambda x: (x[0], x[1]), self.get.items()):
+                self._req.setVariableGET(kvar, kvalue + value if append else value)
+            for kvar, kvalue in map(lambda x: (x[0], x[1]), self.post.items()):
+                self._req.setVariablePOST(kvar, kvalue + value if append else value)
+        elif num_fields == 2:
+            if attr[1] == "get":
+                for kvar, kvalue in map(lambda x: (x[0], x[1]), self.get.items()):
+                    self._req.setVariableGET(kvar, kvalue + value if append else value)
+            elif attr[1] == "post":
+                for kvar, kvalue in map(lambda x: (x[0], x[1]), self.post.items()):
+                    self._req.setVariablePOST(kvar, kvalue + value if append else value)
+            else:
+                raise FuzzExceptBadAPI("Parameters must be specified as params.[get/post].<name>")
+        elif num_fields == 3:
+            try:
+                if attr[1] == "get":
+                    self._req.setVariableGET(attr[2], value)
+                elif attr[1] == "post":
+                    self._req.setVariablePOST(attr[2], value)
+                else:
+                    raise FuzzExceptBadAPI("Parameters must be specified as params.[get/post].<name>")
+            except KeyError:
+                pass
+        else:
+            raise FuzzExceptBadAPI("Parameters must be specified as params.[get/post].<name>")
 
     def get_field(self, field):
         attr = field.split(".")
@@ -283,9 +359,20 @@ class FuzzRequest(object, FuzzRequestUrlMixing, FuzzRequestSoupMixing):
     def reqtime(self, t):
 	self._request.totaltime = t
 
-    def set_field(self, field, value):
-        if field in ["url"]:
-            self.url = value
+    def set_field(self, field, value, append = False):
+        alias = dict([('c', 'code')])
+
+        if field in alias:
+            field = alias[field]
+
+        if field in ["url", "method", "scheme", "host", "content", "raw_content", "code"]:
+            return str(setattr(self, field, value if not append else self.get_field(field) + value))
+        elif field.startswith("cookies"):
+            return self.cookies.set_field(field, value, append)
+        elif field.startswith("headers"):
+            return self.headers.set_field(field, value, append)
+        elif field.startswith("params"):
+            return self.params.set_field(field, value, append)
 
     def get_field(self, field):
         alias = dict([('c', 'code')])
@@ -783,8 +870,8 @@ class FuzzResult:
 
         return self
 
-    def set_field(self, field, value):
-        return self.history.set_field(field, value)
+    def set_field(self, field, value, append = False):
+        return self.history.set_field(field, value, append)
 
     def get_field(self, field):
         alias = dict([('l', 'lines'), ('h', 'chars'), ('w', 'words'), ('c', 'code')])

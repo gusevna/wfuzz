@@ -44,7 +44,7 @@ class FuzzResFilter:
             operator = oneOf("and or")
             not_operator = Optional(oneOf("not"), "notpresent")
 
-            symbol_expr = Group(fuzz_statement + oneOf("= != < > >= <= =~ !~ ~") + (bbb_value ^ error_value ^ fuzz_statement ^ basic_primitives)).setParseAction(self.__compute_expr)
+            symbol_expr = Group(fuzz_statement + oneOf("= != < > >= <= =~ !~ ~ := +=") + (bbb_value ^ error_value ^ fuzz_statement ^ basic_primitives)).setParseAction(self.__compute_expr)
 
             definition = fuzz_statement ^ symbol_expr
             definition_not = not_operator + definition
@@ -208,6 +208,16 @@ class FuzzResFilter:
                 return rightvalue.lower() not in leftvalue.lower()
             elif operator == "~":
                 return rightvalue.lower() in leftvalue.lower()
+            elif operator == ":=":
+                if not 'field' in self.stack: 
+                    raise FuzzExceptIncorrectFilter("You must specify a field.")
+                self.res.set_field(self.stack["field"], rightvalue)
+                return True
+            elif operator == "+=":
+                if not 'field' in self.stack: 
+                    raise FuzzExceptIncorrectFilter("You must specify a field.")
+                self.res.set_field(self.stack["field"], rightvalue, True)
+                return True
         except TypeError,e:
 	    raise FuzzExceptBadOptions("Invalid regex expression used in filter: %s" % str(e))
         except ParseException, e:
