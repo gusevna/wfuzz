@@ -380,6 +380,8 @@ Operator     Description
 =~           True when the regular expression specified matches the value.
 ~            Equivalent to Python's "str2" in "str1" (case insensitive)
 !~           Equivalent to Python's "str2" not in "str1" (case insensitive)
+:=           Assign a value to a FuzzResult field.
++=           Append a value to a FuzzResult field.
 ============ ====================================================================
 
 Where values could be:
